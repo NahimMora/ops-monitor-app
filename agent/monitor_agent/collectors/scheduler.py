@@ -11,8 +11,10 @@ agent talks to Task Scheduler for *reading* state; pause/resume commands
 from __future__ import annotations
 
 import json
+import re
 import subprocess
 from dataclasses import asdict, dataclass
+from datetime import datetime, timezone
 
 
 @dataclass
@@ -85,14 +87,26 @@ def set_task_enabled(task_name: str, enabled: bool, timeout_seconds: float = 10)
     return proc.returncode == 0
 
 
+_DOTNET_DATE_PATTERN = re.compile(r"^/Date\((-?\d+)\)/$")
+
+
 def _normalize_dotnet_date(value: object) -> str | None:
-    # PowerShell's ConvertTo-Json renders DateTime as "/Date(...)/ " style
-    # only under -AsUTC-less legacy paths; with ConvertTo-Json (PS 5.1+)
-    # it renders as an ISO-like string already when the property is a
-    # [datetime]. Passed through as-is; the cloud API parses/validates it.
+    # Real production output from Get-ScheduledTaskInfo | ConvertTo-Json
+    # on this machine (Windows PowerShell 5.1) is the legacy WCF/JavaScript
+    # "/Date(1787283944000)/" format (milliseconds since epoch), NOT an
+    # ISO-like string as originally assumed here -- confirmed by an actual
+    # buffered telemetry payload that the cloud API rejected because
+    # `new Date("/Date(...)/ ")` is not a parseable date. Converted to ISO
+    # 8601 UTC so the wire contract (SchedulerTaskStateSchema, always a
+    # real date string) holds regardless of which format Windows chose.
     if not value:
         return None
-    return str(value)
+    text = str(value)
+    match = _DOTNET_DATE_PATTERN.match(text)
+    if match:
+        millis = int(match.group(1))
+        return datetime.fromtimestamp(millis / 1000, tz=timezone.utc).isoformat()
+    return text
 
 
 def _task_result_to_string(code: object) -> str | None:

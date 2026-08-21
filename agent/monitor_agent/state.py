@@ -116,6 +116,25 @@ class OfflineBuffer:
         lines = self._path.read_text(encoding="utf-8").splitlines()
         return [json.loads(line) for line in lines if line.strip()]
 
+    def take(self, limit: int) -> list[dict[str, Any]]:
+        """Removes and returns up to ``limit`` oldest entries, leaving any
+        remainder in place. Used to cap how many items a single flush
+        attempt retries — see main.py's flush cooldown/cap, which exists
+        because retrying an entire multi-hour backlog in one burst can
+        itself trip the cloud's per-path rate limit, observed in practice
+        after a real outage."""
+        if not self._path.exists() or limit <= 0:
+            return []
+        lines = [l for l in self._path.read_text(encoding="utf-8").splitlines() if l.strip()]
+        if not lines:
+            return []
+        taken, remaining = lines[:limit], lines[limit:]
+        if remaining:
+            self._path.write_text("\n".join(remaining) + "\n", encoding="utf-8")
+        else:
+            self._path.unlink()
+        return [json.loads(line) for line in taken]
+
     def clear(self) -> None:
         if self._path.exists():
             self._path.unlink()

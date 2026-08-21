@@ -14,6 +14,7 @@ from __future__ import annotations
 import json
 import subprocess
 import time
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -31,6 +32,24 @@ from monitor_agent.adapters.base import (
 from monitor_agent.collectors.scheduler import get_task_state, set_task_enabled
 
 _SCRIPT_LABELS = {"scrape": "Scraping", "web": "Web", "instagram": "Instagram", "facebook": "Facebook", "wpp": "WhatsApp", "x": "X"}
+
+
+def _normalize_timestamp(value: object) -> str | None:
+    # data/runtime_24x7_state.json stores started_at/finished_at as Unix
+    # epoch seconds (confirmed from real production data -- an actual
+    # buffered `runs` payload with a raw int like 1787333418 was rejected
+    # by the cloud's RunRecordSchema, which requires an ISO 8601 string
+    # for every timestamp field), not ISO strings as originally assumed
+    # when this adapter was written from the project's documented schema
+    # alone. Handles a plain string defensively too, in case that ever
+    # changes upstream.
+    if value is None:
+        return None
+    if isinstance(value, str):
+        return value
+    if isinstance(value, (int, float)):
+        return datetime.fromtimestamp(value, tz=timezone.utc).isoformat()
+    return None
 
 
 class HolaSaltaScrappingAdapter:
@@ -91,8 +110,8 @@ class HolaSaltaScrappingAdapter:
                     "name": result.get("script"),
                     "display_name": _SCRIPT_LABELS.get(result.get("script"), result.get("label")),
                     "status": "SUCCESS" if result.get("ok") else "FAILED",
-                    "started_at": result.get("started_at"),
-                    "finished_at": result.get("finished_at"),
+                    "started_at": _normalize_timestamp(result.get("started_at")),
+                    "finished_at": _normalize_timestamp(result.get("finished_at")),
                     "error_summary": result.get("reason") if not result.get("ok") else None,
                 }
             )
@@ -102,8 +121,8 @@ class HolaSaltaScrappingAdapter:
         return [
             RunRecord(
                 external_run_id=str(last_cycle.get("cycle_id", "")),
-                started_at=stages[0]["started_at"] if stages else "",
-                finished_at=last_cycle.get("finished_at"),
+                started_at=(stages[0]["started_at"] or "") if stages else "",
+                finished_at=_normalize_timestamp(last_cycle.get("finished_at")),
                 status=overall,
                 trigger="scheduled",
                 items_total=last_cycle.get("total_count"),

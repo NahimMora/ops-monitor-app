@@ -102,6 +102,38 @@ def test_get_runs_maps_script_results_to_stages(tmp_path):
     assert failed_stage["error_summary"] == "navigation timeout"
 
 
+def test_get_runs_converts_real_unix_epoch_timestamps_to_iso(tmp_path):
+    # Regression: data/runtime_24x7_state.json's started_at/finished_at
+    # are Unix epoch seconds in real production data (confirmed live),
+    # not ISO strings as originally assumed -- the cloud's RunRecordSchema
+    # rejected a raw int like 1787333418 outright.
+    _write_state(
+        tmp_path,
+        {
+            "supervisor": {
+                "status": "running",
+                "last_heartbeat": time.time(),
+                "current_cycle": None,
+                "last_cycle": {
+                    "cycle_id": "20260821_143018",
+                    "finished_at": 1787334283,
+                    "success_count": 1,
+                    "total_count": 1,
+                    "status": "ok",
+                    "results": [
+                        {"script": "scrape", "label": "Scraping", "ok": True, "started_at": 1787333418, "finished_at": 1787333448},
+                    ],
+                },
+            }
+        },
+    )
+    run = _adapter(tmp_path).get_runs(since_iso=None)[0]
+    assert run.started_at == "2026-08-21T17:30:18+00:00"
+    assert run.finished_at == "2026-08-21T17:44:43+00:00"
+    assert run.stages[0]["started_at"] == "2026-08-21T17:30:18+00:00"
+    assert run.stages[0]["finished_at"] == "2026-08-21T17:30:48+00:00"
+
+
 def test_sessions_approximated_from_last_cycle_results(tmp_path):
     _write_state(
         tmp_path,

@@ -50,6 +50,32 @@ def test_offline_buffer_append_drain_clear(tmp_path):
     assert buf.pending_count() == 0
 
 
+def test_offline_buffer_take_removes_only_the_requested_count(tmp_path):
+    buf = OfflineBuffer(tmp_path / "buffer.jsonl", max_events=100)
+    for i in range(5):
+        buf.append("heartbeat", {"i": i})
+
+    taken = buf.take(2)
+    assert [t["payload"]["i"] for t in taken] == [0, 1]
+    assert buf.pending_count() == 3
+    assert [d["payload"]["i"] for d in buf.drain()] == [2, 3, 4]
+
+
+def test_offline_buffer_take_more_than_available_takes_everything(tmp_path):
+    buf = OfflineBuffer(tmp_path / "buffer.jsonl", max_events=100)
+    buf.append("heartbeat", {"i": 0})
+    buf.append("heartbeat", {"i": 1})
+
+    taken = buf.take(50)
+    assert len(taken) == 2
+    assert buf.pending_count() == 0
+
+
+def test_offline_buffer_take_on_empty_buffer_returns_empty(tmp_path):
+    buf = OfflineBuffer(tmp_path / "buffer.jsonl", max_events=100)
+    assert buf.take(10) == []
+
+
 def test_offline_buffer_bounded_drops_oldest(tmp_path):
     buf = OfflineBuffer(tmp_path / "buffer.jsonl", max_events=3)
     for i in range(5):

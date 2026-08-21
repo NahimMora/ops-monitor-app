@@ -45,6 +45,19 @@ log = logging.getLogger("monitor_agent")
 # the batch, keeping the most recently-read ones.
 MAX_EVENTS_PER_BATCH = 500
 
+# Real bug found in production: heartbeat_loop, telemetry_loop, and
+# commands_loop each call _flush_offline_buffer() independently on their
+# own schedule (every ~12s/20s/4s). With a backlog built up during an
+# outage, every one of those calls used to retry the ENTIRE buffer at
+# once — three overlapping loops replaying dozens of items each is easily
+# 100+ requests/minute to a single path, which trips the cloud's own
+# per-path rate limit (120/min). That 429 then gets buffered right back,
+# so the backlog could never drain: a self-inflicted deadlock. Fixed with
+# a cooldown between actual flush attempts (below) and a cap on how many
+# items one attempt retries (state.py's OfflineBuffer.take()).
+FLUSH_COOLDOWN_SECONDS = 15
+MAX_FLUSH_ITEMS_PER_ATTEMPT = 20
+
 _KIND_TO_METHOD = {
     "heartbeat": "heartbeat",
     "telemetry": "telemetry",
@@ -65,6 +78,8 @@ class Agent:
             p.slug: build_adapter(p.adapter, p.root_path, p.options) for p in config.projects
         }
         self._stop = threading.Event()
+        self._flush_lock = threading.Lock()
+        self._last_flush_attempt: float = 0.0
 
     # -- outbound send with offline fallback --------------------------------
 
@@ -79,20 +94,26 @@ class Agent:
             self.offline_buffer.append(kind, payload)
 
     def _flush_offline_buffer(self) -> None:
-        pending = self.offline_buffer.drain()
+        # Gate: at most one real flush attempt per FLUSH_COOLDOWN_SECONDS,
+        # no matter how many of the three loops call this concurrently.
+        with self._flush_lock:
+            now = time.monotonic()
+            if now - self._last_flush_attempt < FLUSH_COOLDOWN_SECONDS:
+                return
+            self._last_flush_attempt = now
+
+        pending = self.offline_buffer.take(MAX_FLUSH_ITEMS_PER_ATTEMPT)
         if not pending:
             return
-        log.info("flushing %d buffered events", len(pending))
-        remaining = []
+        log.info("flushing up to %d buffered events (%d pending total)", len(pending), self.offline_buffer.pending_count() + len(pending))
         for item in pending:
             method = getattr(self.client, _KIND_TO_METHOD[item["kind"]])
             try:
                 method(item["payload"])
             except ApiError:
-                remaining.append(item)
-        self.offline_buffer.clear()
-        for item in remaining:
-            self.offline_buffer.append(item["kind"], item["payload"])
+                # Still failing (e.g. still offline) -- put it back for the
+                # next attempt rather than dropping it.
+                self.offline_buffer.append(item["kind"], item["payload"])
 
     # -- loops ----------------------------------------------------------------
 
