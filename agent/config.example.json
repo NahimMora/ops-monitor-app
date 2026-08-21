@@ -1,0 +1,52 @@
+{
+  "hostname": "FERNANDO",
+  "state_dir": "agent/state",
+  "heartbeat_interval_seconds": 12,
+  "telemetry_interval_seconds": 20,
+  "commands_poll_interval_seconds": 4,
+  "machine_health_interval_seconds": 20,
+  "request_timeout_seconds": 10,
+  "max_offline_buffer_events": 5000,
+  "projects": [
+    {
+      "slug": "holasalta-manager",
+      "display_name": "HolaSalta Ops Backend",
+      "adapter": "holasalta_manager",
+      "root_path": "C:\\HolaSalta\\WebApp_HolaSalta",
+      "options": {
+        "health_url": "http://127.0.0.1:8000/health",
+        "scheduler_task_name": "HolaSalta Ops Local Agent",
+        "stale_heartbeat_seconds": 60
+      }
+    },
+    {
+      "slug": "lvr",
+      "display_name": "LVR AutoPublicador",
+      "adapter": "lvr",
+      "root_path": "C:\\LVR",
+      "options": {
+        "heartbeat_file": "data/supervisor_heartbeat.json",
+        "scheduler_task_name": "LaVozRiojana-24x7",
+        "manual_ui_task_name": "LaVozRiojana-ManualUI",
+        "python_exe": "venv\\Scripts\\python.exe",
+        "cli_script": "cli.py",
+        "logs_dir": "logs",
+        "stale_heartbeat_seconds": 900
+      }
+    },
+    {
+      "slug": "holasalta-scrapping",
+      "display_name": "HolaSalta AutoPublicador",
+      "adapter": "holasalta_scrapping",
+      "root_path": "C:\\HolaSalta\\Scrapping_HolaSalta",
+      "options": {
+        "state_file": "data/runtime_24x7_state.json",
+        "scheduler_task_name": "HolaSalta-24x7",
+        "python_exe": "venv\\Scripts\\python.exe",
+        "entrypoint": "run_24x7.py",
+        "logs_dir": "logs",
+        "stale_heartbeat_seconds": 900
+      }
+    }
+  ]
+}

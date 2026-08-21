@@ -1,0 +1,491 @@
+// Ops Monitor — Prisma schema (MySQL / Hostinger)
+//
+// Design notes:
+// - Single admin user, no multi-tenancy (see docs/ARCHITECTURE.md).
+// - Timestamps are always stored UTC; the UI renders them in
+//   America/Argentina/Salta.
+// - Raw/detailed operational rows (LogEvent, telemetry-heavy fields) are
+//   subject to the 30-day retention job (see src/server/retention.ts).
+//   DailyMetric is the long-lived aggregate that survives cleanup.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+// ---------------------------------------------------------------------------
+// Identity / auth
+// ---------------------------------------------------------------------------
+
+model AdminUser {
+  id                    String    @id @default(cuid())
+  email                 String    @unique
+  passwordHash          String
+  totpSecret            String? // optional TOTP, set once enabled from Settings
+  totpEnabled           Boolean   @default(false)
+  failedLoginAttempts   Int       @default(0)
+  lockedUntil           DateTime?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+}
+
+// ---------------------------------------------------------------------------
+// Machine / agent
+// ---------------------------------------------------------------------------
+
+model Machine {
+  id                String   @id @default(cuid())
+  hostname          String   @unique
+  agentId           String   @unique
+  agentVersion      String?
+  osVersion         String?
+  lastHeartbeatAt   DateTime?
+  lastSeenOnlineAt  DateTime?
+  lastOfflineAt     DateTime?
+  isOnline          Boolean  @default(false)
+  bootTimeAt        DateTime?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  healthSnapshots   MachineHealthSnapshot[]
+  projects          Project[]
+  commands          AgentCommand[]
+
+  @@index([isOnline])
+}
+
+// Rolling machine vitals (CPU/RAM/disk/etc.) — one row per telemetry tick.
+// Subject to 30-day retention; DailyMetric keeps the long-lived rollup.
+model MachineHealthSnapshot {
+  id               String   @id @default(cuid())
+  machineId        String
+  machine          Machine  @relation(fields: [machineId], references: [id], onDelete: Cascade)
+  capturedAt       DateTime @default(now())
+  cpuPercent       Float?
+  ramTotalMb       Int?
+  ramUsedMb        Int?
+  diskTotalMb      Int?
+  diskUsedMb       Int?
+  uptimeSeconds    Int?
+  chromeProcessCount Int?
+  chromeMemoryMb   Int?
+  raw              Json? // full collector payload for drill-down
+
+  @@index([machineId, capturedAt])
+}
+
+// ---------------------------------------------------------------------------
+// Projects
+// ---------------------------------------------------------------------------
+
+enum ProjectStatus {
+  HEALTHY
+  RUNNING
+  IDLE
+  DEGRADED
+  STUCK
+  FAILED
+  STOPPED
+  OFFLINE
+  UNREACHABLE
+  UNKNOWN
+}
+
+model Project {
+  id          String   @id @default(cuid())
+  slug        String   @unique // "holasalta-manager" | "lvr" | "holasalta-scrapping"
+  displayName String
+  machineId   String
+  machine     Machine  @relation(fields: [machineId], references: [id])
+  adapterKey  String // maps to agent adapter registry key
+  supportsCommands Json // whitelist of AgentCommandType this project accepts
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  status          ProjectStatus @default(UNKNOWN)
+  statusReason    String?
+  statusUpdatedAt DateTime?
+
+  healthSnapshots ProjectHealthSnapshot[]
+  runs            Run[]
+  incidents       Incident[]
+  logEvents       LogEvent[]
+  dailyMetrics    DailyMetric[]
+  commands        AgentCommand[]
+  sessionHealth   SessionHealth[]
+  schedulerStates SchedulerState[]
+
+  @@index([machineId])
+}
+
+// Point-in-time computed status snapshot (deterministic, see docs/ARCHITECTURE.md).
+model ProjectHealthSnapshot {
+  id            String        @id @default(cuid())
+  projectId     String
+  project       Project       @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  capturedAt    DateTime      @default(now())
+  status        ProjectStatus
+  reason        String?
+  heartbeatAgeSeconds Float?
+  raw           Json? // adapter-specific structured payload (already redacted)
+
+  @@index([projectId, capturedAt])
+}
+
+// ---------------------------------------------------------------------------
+// Runs / stages
+// ---------------------------------------------------------------------------
+
+enum RunStatus {
+  RUNNING
+  SUCCESS
+  NO_WORK
+  DEGRADED
+  FAILED
+  BLOCKED
+  PARTIAL
+  CANCELLED
+  UNKNOWN
+}
+
+model Run {
+  id             String    @id @default(cuid())
+  projectId      String
+  project        Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  externalRunId  String? // e.g. LVR cycle_id, Scrapping cycle_id
+  startedAt      DateTime
+  finishedAt     DateTime?
+  durationSeconds Int?
+  status         RunStatus @default(RUNNING)
+  trigger        String? // "scheduled" | "manual" | "recovery"
+  itemsTotal     Int?
+  itemsSuccess   Int?
+  itemsFailed    Int?
+  successRate    Float?
+  currentStage   String?
+  errorCount     Int       @default(0)
+  warningCount   Int       @default(0)
+  metadata       Json?
+  createdAt      DateTime  @default(now())
+
+  stages         RunStage[]
+  logEvents      LogEvent[]
+  incidentOccurrences IncidentOccurrence[]
+  aiAnalyses     AiAnalysis[]
+
+  @@unique([projectId, externalRunId])
+  @@index([projectId, startedAt])
+  @@index([projectId, status])
+}
+
+model RunStage {
+  id            String    @id @default(cuid())
+  runId         String
+  run           Run       @relation(fields: [runId], references: [id], onDelete: Cascade)
+  name          String
+  displayName   String?
+  startedAt     DateTime?
+  finishedAt    DateTime?
+  durationSeconds Int?
+  status        RunStatus @default(UNKNOWN)
+  itemsTotal    Int?
+  itemsSuccess  Int?
+  itemsFailed   Int?
+  errorSummary  String?
+  channel       String? // "web" | "instagram" | "facebook" | "whatsapp" | "x" | null
+  metadata      Json?
+
+  @@index([runId])
+  @@index([runId, channel])
+}
+
+// ---------------------------------------------------------------------------
+// Incidents (fingerprinted, deduplicated)
+// ---------------------------------------------------------------------------
+
+enum IncidentSeverity {
+  INFO
+  WARNING
+  HIGH
+  CRITICAL
+}
+
+enum IncidentStatus {
+  ACTIVE
+  ACKNOWLEDGED
+  RESOLVED
+}
+
+model Incident {
+  id            String           @id @default(cuid())
+  projectId     String
+  project       Project          @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  fingerprint   String // stable hash of normalized error signature
+  title         String
+  severity      IncidentSeverity @default(WARNING)
+  status        IncidentStatus   @default(ACTIVE)
+  firstSeenAt   DateTime
+  lastSeenAt    DateTime
+  occurrenceCount Int            @default(1)
+  affectedRunCount Int           @default(1)
+  channel       String?
+  recoveredAt   DateTime?
+  acknowledgedAt DateTime?
+  resolvedAt    DateTime?
+  createdAt     DateTime         @default(now())
+  updatedAt     DateTime         @updatedAt
+
+  occurrences   IncidentOccurrence[]
+  aiAnalyses    AiAnalysis[]
+  notifications NotificationEvent[]
+
+  @@unique([projectId, fingerprint])
+  @@index([projectId, status])
+}
+
+model IncidentOccurrence {
+  id          String   @id @default(cuid())
+  incidentId  String
+  incident    Incident @relation(fields: [incidentId], references: [id], onDelete: Cascade)
+  runId       String?
+  run         Run?     @relation(fields: [runId], references: [id], onDelete: SetNull)
+  occurredAt  DateTime
+  message     String   @db.Text // sanitized before storage
+  metadata    Json?
+
+  @@index([incidentId, occurredAt])
+}
+
+// ---------------------------------------------------------------------------
+// Logs (secondary — for diagnosis, not the primary UI)
+// ---------------------------------------------------------------------------
+
+enum LogLevel {
+  DEBUG
+  INFO
+  WARNING
+  ERROR
+}
+
+model LogEvent {
+  id          String   @id @default(cuid())
+  projectId   String
+  project     Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  runId       String?
+  run         Run?     @relation(fields: [runId], references: [id], onDelete: SetNull)
+  occurredAt  DateTime
+  level       LogLevel
+  source      String // log file / module name
+  message     String   @db.Text // sanitized (secrets redacted) before storage
+  dedupeKey   String? // hash used to collapse repeated lines
+  createdAt   DateTime @default(now())
+
+  @@index([projectId, occurredAt])
+  @@index([projectId, level, occurredAt])
+  @@index([dedupeKey])
+}
+
+// ---------------------------------------------------------------------------
+// Metrics (long-lived aggregates, survive raw-data retention cleanup)
+// ---------------------------------------------------------------------------
+
+model DailyMetric {
+  id              String   @id @default(cuid())
+  projectId       String
+  project         Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  date            DateTime @db.Date // stored as the Salta-local calendar day, at UTC midnight
+  runCount        Int      @default(0)
+  runSuccessCount Int      @default(0)
+  runFailedCount  Int      @default(0)
+  runDegradedCount Int     @default(0)
+  itemsTotal      Int      @default(0)
+  itemsSuccess    Int      @default(0)
+  incidentCount   Int      @default(0)
+  availabilitySeconds Int? // machine/project reachable time within the day
+  channelStats    Json? // per-channel success/fail counts
+
+  @@unique([projectId, date])
+  @@index([projectId, date])
+}
+
+// ---------------------------------------------------------------------------
+// AI (Gemini)
+// ---------------------------------------------------------------------------
+
+model AiBrief {
+  id               String   @id @default(cuid())
+  windowStart      DateTime // UTC
+  windowEnd        DateTime // UTC
+  generatedAt      DateTime @default(now())
+  overallStatus    String
+  executiveSummary String   @db.Text
+  payload          Json // full structured response (section 29 shape)
+  promptFingerprint String // idempotency guard for the window
+  model            String
+
+  @@unique([windowStart, windowEnd])
+}
+
+enum AiAnalysisTarget {
+  INCIDENT
+  RUN
+}
+
+model AiAnalysis {
+  id            String           @id @default(cuid())
+  target        AiAnalysisTarget
+  incidentId    String?
+  incident      Incident?        @relation(fields: [incidentId], references: [id], onDelete: Cascade)
+  runId         String?
+  run           Run?             @relation(fields: [runId], references: [id], onDelete: Cascade)
+  requestedAt   DateTime         @default(now())
+  requestedBy   String           @default("admin")
+  model         String
+  payload       Json // probable cause / evidence / recommended actions / confidence
+  cacheKey      String           @unique // dedupe so the same target isn't billed twice
+
+  @@index([incidentId])
+  @@index([runId])
+}
+
+// ---------------------------------------------------------------------------
+// Commands (manual control, whitelisted only)
+// ---------------------------------------------------------------------------
+
+enum AgentCommandType {
+  START
+  STOP
+  RESTART
+  RUN_NOW
+  PAUSE_SCHEDULE
+  RESUME_SCHEDULE
+}
+
+enum AgentCommandStatus {
+  PENDING
+  PICKED_UP
+  RUNNING
+  SUCCEEDED
+  FAILED
+  EXPIRED
+  CANCELLED
+}
+
+model AgentCommand {
+  id           String              @id @default(cuid())
+  machineId    String
+  machine      Machine             @relation(fields: [machineId], references: [id])
+  projectId    String
+  project      Project             @relation(fields: [projectId], references: [id])
+  type         AgentCommandType
+  status       AgentCommandStatus  @default(PENDING)
+  requestedAt  DateTime            @default(now())
+  requestedBy  String              @default("admin")
+  pickedUpAt   DateTime?
+  startedAt    DateTime?
+  finishedAt   DateTime?
+  result       Json?
+  exitCode     Int?
+  error        String?             @db.Text
+  expiresAt    DateTime
+  idempotencyKey String            @unique
+
+  @@index([machineId, status])
+  @@index([projectId, requestedAt])
+}
+
+// ---------------------------------------------------------------------------
+// Audit trail
+// ---------------------------------------------------------------------------
+
+model AuditEvent {
+  id         String   @id @default(cuid())
+  occurredAt DateTime @default(now())
+  actor      String   @default("admin")
+  action     String
+  targetType String?
+  targetId   String?
+  metadata   Json?
+
+  @@index([occurredAt])
+}
+
+// ---------------------------------------------------------------------------
+// Web Push
+// ---------------------------------------------------------------------------
+
+model PushSubscription {
+  id        String   @id @default(cuid())
+  endpoint  String   @unique @db.VarChar(768)
+  p256dh    String
+  auth      String
+  userAgent String?
+  createdAt DateTime @default(now())
+  lastUsedAt DateTime?
+}
+
+enum NotificationEventType {
+  MACHINE_OFFLINE
+  MACHINE_RECOVERED
+  PROJECT_STUCK
+  PROJECT_CRASHED
+  SCHEDULER_DISABLED
+  INCIDENT_CRITICAL
+  SESSION_EXPIRED
+  PROJECT_RECOVERED
+}
+
+model NotificationEvent {
+  id          String                 @id @default(cuid())
+  type        NotificationEventType
+  incidentId  String?
+  incident    Incident?              @relation(fields: [incidentId], references: [id], onDelete: SetNull)
+  dedupeKey   String // fingerprint + cooldown window bucket
+  sentAt      DateTime               @default(now())
+  payload     Json?
+
+  @@unique([dedupeKey])
+}
+
+// ---------------------------------------------------------------------------
+// Sessions (Playwright/Selenium) & scheduler state
+// ---------------------------------------------------------------------------
+
+enum SessionStatus {
+  AUTHENTICATED
+  EXPIRED
+  CHALLENGE
+  BROWSER_ERROR
+  UNKNOWN
+}
+
+model SessionHealth {
+  id          String        @id @default(cuid())
+  projectId   String
+  project     Project       @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  sessionType String // "whatsapp" | "x" | "instagram" | ...
+  status      SessionStatus
+  checkedAt   DateTime
+  reason      String?
+
+  @@index([projectId, sessionType, checkedAt])
+}
+
+model SchedulerState {
+  id             String    @id @default(cuid())
+  projectId      String
+  project        Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  taskName       String
+  enabled        Boolean
+  state          String // Task Scheduler "Ready" | "Running" | "Disabled" | ...
+  lastRunAt      DateTime?
+  lastRunResult  String?
+  nextRunAt      DateTime?
+  capturedAt     DateTime  @default(now())
+
+  @@unique([projectId, taskName])
+}
