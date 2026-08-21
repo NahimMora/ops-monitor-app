@@ -38,7 +38,8 @@ Set every variable listed in `.env.example` in Hostinger's Node.js app
 environment panel — see the root README and `.env.example` for what each
 one is. At minimum for a working deploy: `DATABASE_URL`, `APP_URL`,
 `ADMIN_EMAIL`, `ADMIN_PASSWORD_HASH`, `SESSION_SECRET`, `AGENT_SECRETS`,
-`CRON_SECRET`. `GEMINI_API_KEY` and `VAPID_*` are optional — those
+`CRON_SECRET`. Generate `ADMIN_PASSWORD_HASH` with `npm run admin:hash --
+"your-password"` (see docs/SECURITY.md) — never hand-craft it. `GEMINI_API_KEY` and `VAPID_*` are optional — those
 features degrade to "not configured" (HTTP 501 from the AI endpoints,
 notifications silently skipped) without them, they don't break the rest
 of the app.

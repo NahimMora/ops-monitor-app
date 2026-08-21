@@ -21,6 +21,19 @@ OPS_AGENT_SECRET=<same value as AGENT_SECRETS in the web app's .env, for this ag
 OPS_CLOUD_URL=https://ops.moraapps.com
 ```
 
+`agent\.env` is loaded automatically via `python-dotenv`
+(`monitor_agent/config.py`, `load_config()`) — no manual `set`/export
+needed. Its path (`AGENT_DIR / ".env"`) and `config.json`'s path
+(`AGENT_DIR / "config.json"`) are both resolved relative to the
+**package's own directory**, not the process's current working
+directory, so the agent finds them correctly whether started from
+`C:\Monitor`, `C:\Monitor\agent`, or by Task Scheduler (whose
+`WorkingDirectory` is `C:\Monitor\agent`) — see the module docstring in
+`agent/monitor_agent/config.py` for why this matters. A real environment
+variable (e.g. one Task Scheduler itself sets) always takes priority over
+`agent\.env` (`override=False`), and the secret value is never logged
+anywhere.
+
 Then, from the repo root:
 
 ```powershell
@@ -77,10 +90,16 @@ JSON/JSONL, written atomically (`state.py`'s `_atomic_write_json`):
 powershell -ExecutionPolicy Bypass -File .\scripts\agent-doctor.ps1
 ```
 
-Checks: venv present, `config.json`/`agent\.env` present, the package
-imports cleanly, every configured project's `root_path` still exists, the
-scheduled task is registered and running, and that `agent\state` exists
-(i.e. the agent has run at least once).
+Beyond file-existence checks, it actually **loads the configuration**
+the same way the agent itself does — `load_config()` + building all
+three adapters — and reports, without ever printing the secret value
+itself: agent id present, cloud URL present, secret configured
+(yes/no only), the resolved state dir and whether it exists, and each
+configured project's `root_path` and whether its adapter constructed
+without error. It also distinguishes "task never ran yet" from "task
+started and exited immediately" (non-zero `LastTaskResult` while not
+currently `Running`) — the latter is flagged as a failure, not a vague
+"not running".
 
 ## Tests
 
@@ -89,11 +108,17 @@ cd agent
 .\.venv\Scripts\python.exe -m pytest -q
 ```
 
-42 tests covering: secret redaction, log offset persistence/rotation
+53 tests covering: secret redaction, log offset persistence/rotation
 detection, the offline buffer's bounded-drop behavior, Task Scheduler
 result-code parsing, command whitelist enforcement + idempotent replay,
-and both stateful adapters' status-derivation logic against real fixture
-shapes captured from the live machine.
+both stateful adapters' status-derivation logic against real fixture
+shapes captured from the live machine, `.env`/`config.json` path
+resolution independent of CWD, and a subprocess-based regression that
+reproduces install-agent.ps1's exact invocation context (venv
+`python.exe`, `agent/` as the working directory) to prove the agent
+bootstraps — finds its config, loads `.env`, resolves the state dir,
+builds all three adapters — from that exact context, without running the
+agent's infinite loop or touching any monitored project.
 
 ## Adding a fourth project
 

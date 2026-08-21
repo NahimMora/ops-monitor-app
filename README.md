@@ -49,10 +49,11 @@ npm run db:seed
 npm run dev
 ```
 
-Generate an admin password hash:
+Generate an admin password hash (reuses the app's own `hashPassword()`,
+never prints the password back):
 
 ```bash
-node -e "console.log(require('./src/lib/password.ts'))"  # (or via ts-node/tsx — see docs/SECURITY.md)
+npm run admin:hash -- "your-password"
 ```
 
 Quality gates (all must pass before pushing to `main`):

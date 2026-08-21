@@ -1,6 +1,6 @@
 {
   "hostname": "FERNANDO",
-  "state_dir": "agent/state",
+  "state_dir": "state",
   "heartbeat_interval_seconds": 12,
   "telemetry_interval_seconds": 20,
   "commands_poll_interval_seconds": 4,

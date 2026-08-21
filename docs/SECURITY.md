@@ -76,5 +76,16 @@ If a secret is ever suspected exposed:
   today this means editing the env var and `agent/.env` directly and
   restarting the agent task).
 - `GEMINI_API_KEY` — rotate in Google AI Studio and update the env var.
-- `ADMIN_PASSWORD_HASH` — generate a new hash (`src/lib/password.ts`
-  `hashPassword()`) and update the env var + re-seed.
+- `ADMIN_PASSWORD_HASH` — generate a new hash with `npm run admin:hash --
+  "new-password"` and update the env var + re-seed.
+
+## Generating the admin password hash
+
+```bash
+npm run admin:hash -- "your-password"
+```
+
+`scripts/hash-admin-password.ts` is a thin CLI wrapper around the exact
+same `hashPassword()` (`src/lib/password.ts`, scrypt) the login route
+verifies against — there is no separate/duplicated hashing
+implementation. It prints only the resulting hash, never the password.
