@@ -4,11 +4,38 @@ from monitor_agent.collectors.log_tailer import dedupe_key, read_new_lines
 from monitor_agent.state import LogOffsetStore
 
 
-def test_reads_only_new_lines_since_last_offset(tmp_path):
-    log_path = tmp_path / "app.log"
-    log_path.write_text("line1\nline2\n", encoding="utf-8")
+def test_first_sight_of_a_file_skips_pre_existing_content(tmp_path):
+    # Regression: reading from byte 0 on first sight of a file with real
+    # production history dumped a 3,359-line backlog in one batch on the
+    # agent's actual first run against C:\LVR's logs — well past the
+    # server's per-request event cap. First sight must behave like
+    # `tail -f`, not `cat`.
+    log_path = tmp_path / "preexisting.log"
+    log_path.write_text("old line 1\nold line 2\nold line 3\n", encoding="utf-8")
     offsets = LogOffsetStore(tmp_path / "offsets.json")
 
+    first = read_new_lines(log_path, offsets)
+    assert first == []
+
+    with log_path.open("a", encoding="utf-8") as fh:
+        fh.write("new line\n")
+
+    second = read_new_lines(log_path, offsets)
+    assert [l.text for l in second] == ["new line"]
+
+
+def test_reads_only_new_lines_since_last_offset(tmp_path):
+    log_path = tmp_path / "app.log"
+    offsets = LogOffsetStore(tmp_path / "offsets.json")
+
+    # Establish a baseline offset first (this file "already existed" as
+    # far as the offset store is concerned) so this test is specifically
+    # about incremental reads, not first-sight behavior (covered above).
+    log_path.write_text("", encoding="utf-8")
+    read_new_lines(log_path, offsets)
+
+    with log_path.open("a", encoding="utf-8") as fh:
+        fh.write("line1\nline2\n")
     first = read_new_lines(log_path, offsets)
     assert [l.text for l in first] == ["line1", "line2"]
 
@@ -52,20 +79,27 @@ def test_missing_file_returns_empty(tmp_path):
 
 def test_line_cap_stops_at_max_lines(tmp_path):
     log_path = tmp_path / "app.log"
-    log_path.write_text("\n".join(f"line{i}" for i in range(10)) + "\n", encoding="utf-8")
     offsets = LogOffsetStore(tmp_path / "offsets.json")
+    log_path.write_text("", encoding="utf-8")
+    read_new_lines(log_path, offsets)  # establish baseline (first-sight skip)
+
+    with log_path.open("a", encoding="utf-8") as fh:
+        fh.write("\n".join(f"line{i}" for i in range(10)) + "\n")
     lines = read_new_lines(log_path, offsets, max_lines=3)
     assert len(lines) == 3
 
 
 def test_secrets_redacted_before_returning():
-    log_path_content = "API_KEY=supersecretvalue123\n"
     import tempfile
 
     with tempfile.TemporaryDirectory() as d:
         path = Path(d) / "app.log"
-        path.write_text(log_path_content, encoding="utf-8")
         offsets = LogOffsetStore(Path(d) / "offsets.json")
+        path.write_text("", encoding="utf-8")
+        read_new_lines(path, offsets)  # establish baseline (first-sight skip)
+
+        with path.open("a", encoding="utf-8") as fh:
+            fh.write("API_KEY=supersecretvalue123\n")
         lines = read_new_lines(path, offsets)
         assert "supersecretvalue123" not in lines[0].text
         assert "[REDACTED]" in lines[0].text

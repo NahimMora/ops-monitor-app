@@ -1,5 +1,54 @@
 # Troubleshooting
 
+## Database connectivity
+
+**`Authentication failed against database server, ... credentials for
+"uXXXXXXXXX_..." are not valid`** — run `npm run db:check`. It parses
+`DATABASE_URL` and prints host/port/username/database (password only as
+`configured`/`MISSING`, never the value) and attempts `SELECT 1`,
+reporting a safe, human-readable diagnosis either way.
+
+This exact error means MySQL rejected the username+password combination
+(Prisma error `P1000`) — it is **not** a "wrong database name" or
+"unreachable host" error (those fail differently — `P1001`/`P1002` and a
+different message shape). If the username in the error already has the
+right Hostinger account prefix (Hostinger prefixes both the MySQL
+username and database name with the account id, e.g. `monitor_user` →
+`u123456789_monitor_user`, `monitor` → `u123456789_monitor`), the
+password is almost always the culprit:
+
+1. In hPanel → Databases → MySQL Databases, confirm/reset the password
+   for that exact user.
+2. If the password contains any of `@ : / ? # % & +`, it **must** be
+   percent-encoded inside `DATABASE_URL` (`mysql://user:PASSWORD@host:port/db`)
+   or the URL parser will silently split it wrong. Encode it with:
+   `node -e "console.log(encodeURIComponent(process.argv[1]))" "the-password"`
+3. Update only the password segment of `DATABASE_URL` in Hostinger's
+   environment variables panel, redeploy, and run `npm run db:check`
+   again.
+
+`/api/health` reflects this too — `{"status":"error","database":"unavailable"}`
+with HTTP 503 when Prisma can't authenticate/connect, never a raw stack
+trace, and never `"ok"` when the DB is actually down (see
+`src/server/db-error.ts`, `isDatabaseUnavailableError()`). The same
+classifier powers `/api/auth/login`'s handling — a DB outage during login
+returns the same clean 503 body instead of an unhandled 500, and every
+page under `(protected)` renders a plain "Database unavailable" message
+(`src/app/(protected)/error.tsx`) instead of Next's default error screen.
+
+## `Error: Server is not running. at Server.close`
+
+Seen once in Hostinger's runtime log immediately after the Prisma
+authentication failures. This repo has no custom server entry point —
+`start` is plain `next start` (verified: no `server.js`, no
+`http.createServer`/`.close()` calls anywhere in this codebase) — so this
+stack trace originates inside Next.js's own internals, almost certainly
+triggered by Hostinger's platform sending a restart/shutdown signal
+during a redeploy or crash-restart cycle, not by application code. If it
+stops appearing once `DATABASE_URL` is fixed (a route repeatedly throwing
+can trigger extra restart cycles on some platforms), treat it as
+resolved; it is not something to chase with speculative code changes.
+
 ## Build / dev
 
 **`Missing required environment variable: X`** — one of the `required()`

@@ -37,6 +37,14 @@ logging.basicConfig(
 )
 log = logging.getLogger("monitor_agent")
 
+# Defense-in-depth alongside the log tailer's tail-from-end-on-first-sight
+# fix (log_tailer.py): keeps a single events_batch request comfortably
+# under the server's EventsBatchSchema cap (1000, src/server/contracts.ts)
+# even in an edge case that produces an unusually large burst (e.g. a log
+# rotation observed as a fresh, large file). Drops the oldest entries in
+# the batch, keeping the most recently-read ones.
+MAX_EVENTS_PER_BATCH = 500
+
 _KIND_TO_METHOD = {
     "heartbeat": "heartbeat",
     "telemetry": "telemetry",
@@ -154,8 +162,18 @@ class Agent:
                         )
                     )
                 if events:
+                    if len(events) > MAX_EVENTS_PER_BATCH:
+                        log.warning(
+                            "%s: %d log events collected this cycle, sending only the most recent %d",
+                            slug,
+                            len(events),
+                            MAX_EVENTS_PER_BATCH,
+                        )
+                        events = events[-MAX_EVENTS_PER_BATCH:]
                     self._safe_call(
-                        lambda: self.send_or_buffer("events_batch", {"agent_id": self.config.agent_id, "events": events})
+                        lambda events=events: self.send_or_buffer(
+                            "events_batch", {"agent_id": self.config.agent_id, "events": events}
+                        )
                     )
             self._stop.wait(self.config.telemetry_interval_seconds)
 

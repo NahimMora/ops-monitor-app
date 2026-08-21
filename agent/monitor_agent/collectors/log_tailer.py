@@ -49,14 +49,20 @@ def read_new_lines(
     stored = offsets.get(file_key)
     size = path.stat().st_size
 
-    start_offset = 0
     if stored:
         stored_offset = int(stored.get("offset", 0))
         # File shrank (truncated or rotated to a fresh generation) -> restart from 0.
-        if stored_offset <= size:
-            start_offset = stored_offset
-        else:
-            start_offset = 0
+        start_offset = stored_offset if stored_offset <= size else 0
+    else:
+        # First time this agent has ever seen this file: skip whatever
+        # was already in it and start tailing from here on, like any
+        # log-shipper's normal "tail -f" behavior. Reading from byte 0 on
+        # first sight would dump a project's entire pre-existing log
+        # history (observed in practice: one LVR log directory alone
+        # produced a single 3,359-event batch on first run, well past the
+        # server's per-request cap) instead of only what's actually new
+        # since monitoring started.
+        start_offset = size
 
     lines: list[LogLine] = []
     bytes_read = 0

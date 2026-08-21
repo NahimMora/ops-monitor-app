@@ -25,12 +25,32 @@ to GitHub → repository `NahimMora/ops-monitor-app` → branch `main`.
 
 ## 3. MySQL
 
-Create a MySQL database from hPanel → Databases. Note host, port, user,
-password, database name. Build the connection string:
+Create a MySQL database from hPanel → Databases. Hostinger prefixes both
+the username and the database name with your account id (e.g. a logical
+user `monitor_user` becomes `u123456789_monitor_user`, and a logical
+database `monitor` becomes `u123456789_monitor`) — use the **full
+prefixed names shown in hPanel**, not the logical names you originally
+typed. Note host, port, full username, password, full database name.
+Build the connection string:
 
 ```
 DATABASE_URL=mysql://USER:PASSWORD@HOST:PORT/DATABASE
 ```
+
+If the password contains any of `@ : / ? # % & +`, percent-encode it
+first: `node -e "console.log(encodeURIComponent(process.argv[1]))" "the-password"`.
+
+Once `DATABASE_URL` is set (locally, or by pulling it into a shell with
+access to the deployed environment), verify it before doing anything else:
+
+```bash
+npm run db:check
+```
+
+This prints host/port/username/database (password only as `configured`,
+never the value) and attempts `SELECT 1`, with a safe, specific diagnosis
+on failure — see docs/TROUBLESHOOTING.md "Database connectivity" for what
+each failure mode means.
 
 ## 4. Environment variables
 
