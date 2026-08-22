@@ -8,13 +8,13 @@ export default async function AiPage() {
 
   return (
     <div className="mx-auto max-w-3xl px-4 py-6 md:px-8 md:py-8">
-      <h1 className="mb-1 text-lg font-semibold text-text-primary">AI Ops Brief</h1>
-      <p className="mb-6 text-xs text-text-tertiary">
+      <h1 className="mb-1 text-2xl font-semibold tracking-tight text-text-primary">AI Ops Brief</h1>
+      <p className="mb-6 text-sm text-text-tertiary">
         Generated daily at 18:00 (America/Argentina/Salta) by Gemini, from pre-aggregated, redacted operational data — never raw logs.
       </p>
 
       {briefs.length === 0 && (
-        <div className="rounded-xl border border-border-subtle bg-surface-1 p-4 text-sm text-text-tertiary">
+        <div className="rounded-xl border border-dashed border-border-subtle p-4 text-sm text-text-tertiary">
           No briefs generated yet. Configure GEMINI_API_KEY and the Hostinger cron job (see docs/AI_ANALYSIS.md).
         </div>
       )}
@@ -33,9 +33,9 @@ export default async function AiPage() {
           return (
             <div key={brief.id} className="rounded-xl border border-border-subtle bg-surface-1 p-4">
               <div className="mb-2 flex items-center justify-between">
-                <div className="text-xs text-text-tertiary">{formatSaltaDateTime(brief.generatedAt)}</div>
+                <div className="font-mono text-xs text-text-tertiary">{formatSaltaDateTime(brief.generatedAt)}</div>
                 <span
-                  className={`rounded-full px-2 py-0.5 text-xs ${
+                  className={`rounded-full px-2 py-0.5 text-[11px] font-semibold tracking-wide uppercase ${
                     brief.overallStatus === "healthy"
                       ? "bg-status-healthy-bg text-status-healthy"
                       : brief.overallStatus === "degraded"
@@ -58,7 +58,7 @@ export default async function AiPage() {
                   </ul>
                 </div>
               )}
-              <div className="mt-2 text-xs text-text-tertiary">Confianza: {Math.round((payload.confidence ?? 0) * 100)}%</div>
+              <div className="mt-2 font-mono text-xs text-text-tertiary">Confianza: {Math.round((payload.confidence ?? 0) * 100)}%</div>
             </div>
           );
         })}

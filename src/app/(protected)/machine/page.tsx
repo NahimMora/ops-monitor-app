@@ -29,12 +29,18 @@ export default async function MachinePage() {
   return (
     <div className="mx-auto max-w-3xl px-4 py-6 md:px-8 md:py-8">
       <AutoRefresh intervalMs={10000} />
-      <div className="mb-6 flex items-center justify-between">
-        <h1 className="text-lg font-semibold text-text-primary">{machine.hostname}</h1>
-        <span className={`rounded-full px-3 py-1 text-xs font-medium ${online ? "bg-status-healthy-bg text-status-healthy" : "bg-status-critical-bg text-status-critical"}`}>
-          {online ? "Online" : "MACHINE OFFLINE"}
+      <div className="mb-1 flex items-center justify-between">
+        <h1 className="text-2xl font-semibold tracking-tight text-text-primary">{machine.hostname}</h1>
+        <span
+          className={`inline-flex items-center gap-2 rounded-full border px-3 py-1 text-xs font-semibold tracking-wide uppercase ${
+            online ? "border-status-healthy/20 bg-status-healthy-bg text-status-healthy" : "border-status-critical/20 bg-status-critical-bg text-status-critical"
+          }`}
+        >
+          <span className={`size-1.5 rounded-full ${online ? "bg-status-healthy" : "bg-status-critical"}`} />
+          {online ? "Online" : "Machine offline"}
         </span>
       </div>
+      <p className="mb-5 text-sm text-text-tertiary">Windows agent host running the pipeline schedulers.</p>
 
       <div className="mb-6 grid grid-cols-2 gap-3 md:grid-cols-4">
         <Stat label="CPU" value={latestSnapshot ? `${latestSnapshot.cpuPercent?.toFixed(0)}%` : "Unavailable"} />
@@ -51,16 +57,20 @@ export default async function MachinePage() {
       </div>
 
       <section>
-        <h2 className="mb-2 text-sm font-semibold text-text-secondary">Task Scheduler</h2>
+        <h2 className="mb-3 text-[11px] font-semibold tracking-[0.14em] text-text-tertiary uppercase">Task scheduler</h2>
         <div className="space-y-1.5">
-          {schedulerTasks.length === 0 && <div className="text-xs text-text-tertiary">No data yet.</div>}
+          {schedulerTasks.length === 0 && (
+            <div className="rounded-xl border border-dashed border-border-subtle p-4 text-xs text-text-tertiary">No data yet.</div>
+          )}
           {schedulerTasks.map((task) => (
             <div key={task.id} className="flex items-center justify-between rounded-lg border border-border-subtle bg-surface-1 px-3 py-2 text-xs">
               <div>
                 <div className="text-text-primary">{task.taskName}</div>
                 <div className="text-text-tertiary">{task.project.displayName}</div>
               </div>
-              <span className={task.enabled ? "text-status-healthy" : "text-status-degraded"}>{task.enabled ? "Enabled" : "Disabled"} · {task.state}</span>
+              <span className={`font-mono ${task.enabled ? "text-status-healthy" : "text-status-degraded"}`}>
+                {task.enabled ? "Enabled" : "Disabled"} · {task.state}
+              </span>
             </div>
           ))}
         </div>
@@ -72,8 +82,8 @@ export default async function MachinePage() {
 function Stat({ label, value }: { label: string; value: string }) {
   return (
     <div className="rounded-lg border border-border-subtle bg-surface-1 p-3">
-      <div className="text-xs text-text-tertiary">{label}</div>
-      <div className="mt-0.5 text-sm font-semibold text-text-primary">{value}</div>
+      <div className="text-[10px] tracking-wide text-text-tertiary uppercase">{label}</div>
+      <div className="mt-0.5 font-mono text-sm font-semibold text-text-primary">{value}</div>
     </div>
   );
 }

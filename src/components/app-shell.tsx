@@ -28,23 +28,29 @@ export function AppShell({ children, adminEmail }: { children: React.ReactNode; 
   return (
     <div className="min-h-dvh bg-surface-0 text-text-primary">
       <div className="flex min-h-dvh">
-        <aside className="hidden w-56 shrink-0 border-r border-border-subtle bg-surface-1 md:flex md:flex-col">
-          <div className="px-5 py-5">
-            <div className="text-sm font-semibold tracking-wide text-text-primary">OPS MONITOR</div>
-            <div className="mt-0.5 text-xs text-text-tertiary">Mission control</div>
+        <aside className="hidden w-60 shrink-0 border-r border-border-subtle bg-surface-1 md:flex md:flex-col">
+          <div className="flex items-center gap-2.5 px-5 py-5">
+            <span aria-hidden className="flex size-7 shrink-0 items-center justify-center rounded-md bg-accent-bg text-accent">
+              <span className="size-2 rounded-[2px] bg-accent" />
+            </span>
+            <div>
+              <div className="text-sm font-semibold tracking-tight text-text-primary">Ops Monitor</div>
+              <div className="text-[11px] tracking-wide text-text-tertiary uppercase">Mission control</div>
+            </div>
           </div>
-          <nav className="flex-1 space-y-0.5 px-2">
+          <nav className="flex-1 space-y-0.5 px-3">
             {NAV_ITEMS.map((item) => {
               const active = pathname === item.href || (item.href !== "/" && pathname?.startsWith(item.href));
               return (
                 <Link
                   key={item.href}
                   href={item.href}
-                  className={`flex items-center gap-3 rounded-md px-3 py-2 text-sm transition-colors ${
+                  className={`relative flex items-center gap-3 rounded-md px-3 py-2 text-sm transition-colors ${
                     active ? "bg-surface-3 text-text-primary" : "text-text-secondary hover:bg-surface-2 hover:text-text-primary"
                   }`}
                 >
-                  <span aria-hidden className="w-4 text-center text-text-tertiary">
+                  {active && <span aria-hidden className="absolute inset-y-1.5 left-0 w-0.5 rounded-full bg-accent" />}
+                  <span aria-hidden className={`w-4 text-center ${active ? "text-accent" : "text-text-tertiary"}`}>
                     {item.icon}
                   </span>
                   {item.label}
@@ -57,9 +63,9 @@ export function AppShell({ children, adminEmail }: { children: React.ReactNode; 
             <button
               onClick={handleLogout}
               disabled={loggingOut}
-              className="mt-2 text-xs text-text-secondary underline decoration-border-strong underline-offset-2 hover:text-text-primary"
+              className="mt-2 text-xs text-text-secondary underline decoration-border-strong underline-offset-2 hover:text-text-primary disabled:opacity-50"
             >
-              Sign out
+              {loggingOut ? "Signing out…" : "Sign out"}
             </button>
           </div>
         </aside>
@@ -77,7 +83,7 @@ export function AppShell({ children, adminEmail }: { children: React.ReactNode; 
               key={item.href}
               href={item.href}
               className={`flex flex-1 flex-col items-center gap-0.5 py-2.5 text-[10px] ${
-                active ? "text-status-running" : "text-text-tertiary"
+                active ? "text-accent" : "text-text-tertiary"
               }`}
             >
               <span aria-hidden className="text-base leading-none">

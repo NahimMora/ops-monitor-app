@@ -22,8 +22,8 @@ export default async function ProjectPage({ params }: { params: Promise<{ slug: 
 
       <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="text-lg font-semibold text-text-primary">{project.displayName}</h1>
-          <div className="text-xs text-text-tertiary">{project.statusReason ?? "—"}</div>
+          <h1 className="text-2xl font-semibold tracking-tight text-text-primary">{project.displayName}</h1>
+          <div className="text-sm text-text-tertiary">{project.statusReason ?? "—"}</div>
         </div>
         <StatusBadge status={project.status as ProjectStatus} />
       </div>
@@ -52,7 +52,7 @@ export default async function ProjectPage({ params }: { params: Promise<{ slug: 
 
       {lastRun && lastRun.stages.length > 0 && (
         <section className="mb-6">
-          <h2 className="mb-2 text-sm font-semibold text-text-secondary">Stages — last run</h2>
+          <h2 className="mb-2 text-[11px] font-semibold tracking-[0.14em] text-text-tertiary uppercase">Stages — last run</h2>
           <div className="space-y-1.5">
             {lastRun.stages.map((stage) => (
               <div key={stage.id} className="flex items-center justify-between rounded-lg border border-border-subtle bg-surface-1 px-3 py-2 text-xs">
@@ -74,7 +74,7 @@ export default async function ProjectPage({ params }: { params: Promise<{ slug: 
 
       {sessions.length > 0 && (
         <section className="mb-6">
-          <h2 className="mb-2 text-sm font-semibold text-text-secondary">Sessions</h2>
+          <h2 className="mb-2 text-[11px] font-semibold tracking-[0.14em] text-text-tertiary uppercase">Sessions</h2>
           <div className="grid grid-cols-2 gap-2 md:grid-cols-3">
             {sessions.map((s) => (
               <div key={s.id} className="rounded-lg border border-border-subtle bg-surface-1 px-3 py-2 text-xs">
@@ -88,7 +88,7 @@ export default async function ProjectPage({ params }: { params: Promise<{ slug: 
 
       {scheduler.length > 0 && (
         <section className="mb-6">
-          <h2 className="mb-2 text-sm font-semibold text-text-secondary">Scheduler</h2>
+          <h2 className="mb-2 text-[11px] font-semibold tracking-[0.14em] text-text-tertiary uppercase">Scheduler</h2>
           <div className="space-y-1.5">
             {scheduler.map((task) => (
               <div key={task.id} className="flex items-center justify-between rounded-lg border border-border-subtle bg-surface-1 px-3 py-2 text-xs">
@@ -103,7 +103,7 @@ export default async function ProjectPage({ params }: { params: Promise<{ slug: 
       )}
 
       <section className="mb-6">
-        <h2 className="mb-2 text-sm font-semibold text-text-secondary">Recent runs</h2>
+        <h2 className="mb-2 text-[11px] font-semibold tracking-[0.14em] text-text-tertiary uppercase">Recent runs</h2>
         <div className="space-y-1.5">
           {recentRuns.length === 0 && <div className="text-xs text-text-tertiary">No data</div>}
           {recentRuns.map((run) => (
@@ -123,7 +123,7 @@ export default async function ProjectPage({ params }: { params: Promise<{ slug: 
       </section>
 
       <section>
-        <h2 className="mb-2 text-sm font-semibold text-text-secondary">Incidents</h2>
+        <h2 className="mb-2 text-[11px] font-semibold tracking-[0.14em] text-text-tertiary uppercase">Incidents</h2>
         <div className="space-y-1.5">
           {incidents.length === 0 && <div className="text-xs text-text-tertiary">No incidents recorded.</div>}
           {incidents.map((incident) => (
@@ -144,9 +144,9 @@ export default async function ProjectPage({ params }: { params: Promise<{ slug: 
 function Stat({ label, value, sub }: { label: string; value: string; sub: string }) {
   return (
     <div className="rounded-lg border border-border-subtle bg-surface-1 p-3">
-      <div className="text-xs text-text-tertiary">{label}</div>
-      <div className="mt-0.5 text-sm font-semibold text-text-primary">{value}</div>
-      {sub && <div className="text-xs text-text-tertiary">{sub}</div>}
+      <div className="text-[10px] tracking-wide text-text-tertiary uppercase">{label}</div>
+      <div className="mt-0.5 font-mono text-sm font-semibold text-text-primary">{value}</div>
+      {sub && <div className="font-mono text-xs text-text-tertiary">{sub}</div>}
     </div>
   );
 }

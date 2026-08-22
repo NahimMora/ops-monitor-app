@@ -50,11 +50,17 @@ export function StatusBadge({ status }: { status: ProjectStatus }) {
   const style = statusStyle(status);
   return (
     <span
-      className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium"
+      className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-semibold tracking-wide uppercase"
       style={{ backgroundColor: style.bgVar, color: style.colorVar }}
     >
       <StatusDot status={status} size={6} />
       {style.label}
     </span>
   );
+}
+
+/** Thin left-edge rail, keyed to status color — the app's "rack LED" signature, used on every card. */
+export function StatusRail({ status }: { status: ProjectStatus }) {
+  const style = statusStyle(status);
+  return <span aria-hidden className="absolute inset-y-0 left-0 w-[3px] rounded-l-xl" style={{ backgroundColor: style.colorVar }} />;
 }

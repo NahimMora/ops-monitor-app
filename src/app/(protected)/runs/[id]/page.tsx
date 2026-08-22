@@ -20,8 +20,8 @@ export default async function RunDetailPage({ params }: { params: Promise<{ id: 
     <div className="mx-auto max-w-3xl px-4 py-6 md:px-8 md:py-8">
       <div className="mb-4 flex items-center justify-between">
         <div>
-          <h1 className="text-lg font-semibold text-text-primary">{run.project.displayName}</h1>
-          <div className="text-xs text-text-tertiary">{formatSaltaDateTime(run.startedAt)}</div>
+          <h1 className="text-2xl font-semibold tracking-tight text-text-primary">{run.project.displayName}</h1>
+          <div className="font-mono text-xs text-text-tertiary">{formatSaltaDateTime(run.startedAt)}</div>
         </div>
         <StatusBadge status={run.status as ProjectStatus} />
       </div>
@@ -34,7 +34,7 @@ export default async function RunDetailPage({ params }: { params: Promise<{ id: 
       </div>
 
       <section className="mb-6">
-        <h2 className="mb-2 text-sm font-semibold text-text-secondary">Stages</h2>
+        <h2 className="mb-2 text-[11px] font-semibold tracking-[0.14em] text-text-tertiary uppercase">Stages</h2>
         <div className="space-y-1.5">
           {run.stages.map((stage) => (
             <div key={stage.id} className="rounded-lg border border-border-subtle bg-surface-1 px-3 py-2 text-xs">
@@ -50,7 +50,7 @@ export default async function RunDetailPage({ params }: { params: Promise<{ id: 
 
       <section className="mb-6">
         <div className="mb-2 flex items-center justify-between">
-          <h2 className="text-sm font-semibold text-text-secondary">AI diagnosis</h2>
+          <h2 className="text-[11px] font-semibold tracking-[0.14em] text-text-tertiary uppercase">AI diagnosis</h2>
           <AnalyzeButton kind="run" id={run.id} hasExisting={Boolean(analysis)} />
         </div>
         {analysis ? (
@@ -63,7 +63,7 @@ export default async function RunDetailPage({ params }: { params: Promise<{ id: 
       </section>
 
       <section>
-        <h2 className="mb-2 text-sm font-semibold text-text-secondary">Log excerpt</h2>
+        <h2 className="mb-2 text-[11px] font-semibold tracking-[0.14em] text-text-tertiary uppercase">Log excerpt</h2>
         <div className="max-h-96 space-y-1 overflow-y-auto rounded-lg border border-border-subtle bg-surface-1 p-3 font-mono text-xs">
           {run.logEvents.length === 0 && <div className="text-text-tertiary">No log events recorded for this run.</div>}
           {run.logEvents.map((log) => (
@@ -80,8 +80,8 @@ export default async function RunDetailPage({ params }: { params: Promise<{ id: 
 function Stat({ label, value }: { label: string; value: string }) {
   return (
     <div className="rounded-lg border border-border-subtle bg-surface-1 p-3">
-      <div className="text-xs text-text-tertiary">{label}</div>
-      <div className="mt-0.5 text-sm font-semibold text-text-primary">{value}</div>
+      <div className="text-[10px] tracking-wide text-text-tertiary uppercase">{label}</div>
+      <div className="mt-0.5 font-mono text-sm font-semibold text-text-primary">{value}</div>
     </div>
   );
 }
