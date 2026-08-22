@@ -3,15 +3,24 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useState } from "react";
+import { MoreSheet } from "@/components/more-sheet";
 
+// Full set — desktop sidebar shows all of these flat, no overflow needed
+// at that width.
 const NAV_ITEMS = [
   { href: "/", label: "Overview", icon: "◱" },
   { href: "/runs", label: "Runs", icon: "▤" },
   { href: "/incidents", label: "Incidents", icon: "⚠" },
-  { href: "/ai", label: "AI", icon: "✦" },
+  { href: "/logs", label: "Logs", icon: "☰" },
+  { href: "/alerts", label: "Alerts", icon: "◈" },
   { href: "/machine", label: "Machine", icon: "▣" },
+  { href: "/ai", label: "AI", icon: "✦" },
   { href: "/settings", label: "Settings", icon: "⚙" },
 ];
+
+// Mobile bottom nav is capped at 5 primary destinations + a "More" sheet
+// for the rest (PROMPT §65) — Alerts/AI/Settings live in MoreSheet.
+const MOBILE_PRIMARY = ["/", "/runs", "/incidents", "/logs", "/machine"];
 
 export function AppShell({ children, adminEmail }: { children: React.ReactNode; adminEmail: string }) {
   const pathname = usePathname();
@@ -24,6 +33,13 @@ export function AppShell({ children, adminEmail }: { children: React.ReactNode; 
     router.push("/login");
     router.refresh();
   }
+
+  function isActive(href: string) {
+    return pathname === href || (href !== "/" && pathname?.startsWith(href));
+  }
+
+  const mobileItems = NAV_ITEMS.filter((item) => MOBILE_PRIMARY.includes(item.href));
+  const moreActive = NAV_ITEMS.some((item) => !MOBILE_PRIMARY.includes(item.href) && isActive(item.href));
 
   return (
     <div className="min-h-dvh bg-surface-0 text-text-primary">
@@ -40,7 +56,7 @@ export function AppShell({ children, adminEmail }: { children: React.ReactNode; 
           </div>
           <nav className="flex-1 space-y-0.5 px-3">
             {NAV_ITEMS.map((item) => {
-              const active = pathname === item.href || (item.href !== "/" && pathname?.startsWith(item.href));
+              const active = isActive(item.href);
               return (
                 <Link
                   key={item.href}
@@ -75,16 +91,14 @@ export function AppShell({ children, adminEmail }: { children: React.ReactNode; 
         </div>
       </div>
 
-      <nav className="fixed inset-x-0 bottom-0 z-20 flex border-t border-border-subtle bg-surface-1/95 backdrop-blur md:hidden">
-        {NAV_ITEMS.map((item) => {
-          const active = pathname === item.href || (item.href !== "/" && pathname?.startsWith(item.href));
+      <nav className="fixed inset-x-0 bottom-0 z-20 flex border-t border-border-subtle bg-surface-1/95 pb-[env(safe-area-inset-bottom)] backdrop-blur md:hidden">
+        {mobileItems.map((item) => {
+          const active = isActive(item.href);
           return (
             <Link
               key={item.href}
               href={item.href}
-              className={`flex flex-1 flex-col items-center gap-0.5 py-2.5 text-[10px] ${
-                active ? "text-accent" : "text-text-tertiary"
-              }`}
+              className={`flex flex-1 flex-col items-center gap-0.5 py-2.5 text-[10px] ${active ? "text-accent" : "text-text-tertiary"}`}
             >
               <span aria-hidden className="text-base leading-none">
                 {item.icon}
@@ -93,6 +107,7 @@ export function AppShell({ children, adminEmail }: { children: React.ReactNode; 
             </Link>
           );
         })}
+        <MoreSheet active={moreActive} onLogout={handleLogout} />
       </nav>
     </div>
   );

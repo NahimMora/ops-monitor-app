@@ -92,14 +92,19 @@ See [CLOUDFLARE_DOMAIN.md](CLOUDFLARE_DOMAIN.md).
 
 ## 8. Cron jobs (Hostinger Cron)
 
-Add three cron jobs from hPanel → Advanced → Cron Jobs, each a `curl`
+Add four cron jobs from hPanel → Advanced → Cron Jobs, each a `curl`
 POST with the `X-Cron-Secret` header set to the `CRON_SECRET` env var:
 
 | Job | Schedule | Command |
 |---|---|---|
 | Machine health check | every 5 minutes | `curl -s -X POST -H "X-Cron-Secret: $CRON_SECRET" https://ops.moraapps.com/api/cron/machine-health-check` |
+| Alert evaluation | every 5 minutes | `curl -s -X POST -H "X-Cron-Secret: $CRON_SECRET" https://ops.moraapps.com/api/cron/evaluate-alerts` |
 | Daily AI brief | 18:00 America/Argentina/Salta | `curl -s -X POST -H "X-Cron-Secret: $CRON_SECRET" https://ops.moraapps.com/api/cron/daily-ai-brief` |
 | Retention cleanup | daily, e.g. 04:00 | `curl -s -X POST -H "X-Cron-Secret: $CRON_SECRET" https://ops.moraapps.com/api/cron/retention` |
+
+Alert evaluation is deterministic (see `src/server/alerts.ts`) — no AI,
+no external calls, safe to run at the same 5-minute cadence as the
+health check.
 
 **Timezone note:** if Hostinger's cron scheduler runs in UTC (common),
 schedule the daily brief job at **21:00 UTC**, which is 18:00

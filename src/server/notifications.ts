@@ -20,6 +20,8 @@ const COOLDOWN_MINUTES: Record<NotificationEventType, number> = {
   INCIDENT_CRITICAL: 30,
   SESSION_EXPIRED: 60,
   PROJECT_RECOVERED: 0,
+  ALERT_FIRING: 30,
+  ALERT_RESOLVED: 0,
 };
 
 const TITLES: Record<NotificationEventType, string> = {
@@ -31,6 +33,8 @@ const TITLES: Record<NotificationEventType, string> = {
   INCIDENT_CRITICAL: "Critical incident",
   SESSION_EXPIRED: "Session expired",
   PROJECT_RECOVERED: "Project recovered",
+  ALERT_FIRING: "Alert firing",
+  ALERT_RESOLVED: "Alert resolved",
 };
 
 function vapidConfigured(): boolean {
@@ -40,11 +44,17 @@ function vapidConfigured(): boolean {
 export async function queueNotification(
   type: NotificationEventType,
   incidentId: string | null,
-  payload: Record<string, unknown>
+  payload: Record<string, unknown>,
+  // Non-incident callers (the alert engine) need their own dedupe
+  // discriminator — `incidentId` is a real FK to Incident and cannot be
+  // reused as an arbitrary key for alert/rule identity without violating
+  // the foreign key constraint. Defaults to incidentId for backward
+  // compatibility with every existing incident-based call site.
+  dedupeDiscriminator: string | null = incidentId
 ): Promise<{ sent: boolean; reason?: string }> {
   const cooldownMinutes = COOLDOWN_MINUTES[type];
   const bucket = cooldownMinutes === 0 ? Date.now() : Math.floor(Date.now() / (cooldownMinutes * 60 * 1000));
-  const dedupeKey = `${type}:${incidentId ?? "none"}:${bucket}`;
+  const dedupeKey = `${type}:${dedupeDiscriminator ?? "none"}:${bucket}`;
 
   try {
     await prisma.notificationEvent.create({

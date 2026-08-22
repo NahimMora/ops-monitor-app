@@ -28,6 +28,26 @@
   --status-offline: #6b7280;
   --status-offline-bg: #1c1e23;
 
+  /* Severity is a distinct semantic axis from status — an alert's
+     severity (how bad) is not the same concept as a project's status
+     (what state it's in), even though today they borrow the same three
+     colors. Keep them as separate tokens so they can diverge later
+     without a status change silently restyling every alert. */
+  --severity-info: var(--status-running);
+  --severity-info-bg: var(--status-running-bg);
+  --severity-warning: var(--status-degraded);
+  --severity-warning-bg: var(--status-degraded-bg);
+  --severity-critical: var(--status-critical);
+  --severity-critical-bg: var(--status-critical-bg);
+
+  /* Action semantics — separate from both status and severity. Buttons
+     signal risk/priority of the ACTION, not the health of what they act
+     on (PROMPT §26: "no mezclar semánticas"). */
+  --action-primary: var(--accent);
+  --action-primary-bg: var(--accent-bg);
+  --action-danger: var(--status-critical);
+  --action-danger-bg: var(--status-critical-bg);
+
   --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, Roboto, Helvetica, Arial, sans-serif;
   --font-mono: ui-monospace, "Cascadia Code", "SFMono-Regular", Menlo, Consolas, monospace;
 }
@@ -58,6 +78,18 @@
   --color-status-critical-bg: var(--status-critical-bg);
   --color-status-offline: var(--status-offline);
   --color-status-offline-bg: var(--status-offline-bg);
+
+  --color-severity-info: var(--severity-info);
+  --color-severity-info-bg: var(--severity-info-bg);
+  --color-severity-warning: var(--severity-warning);
+  --color-severity-warning-bg: var(--severity-warning-bg);
+  --color-severity-critical: var(--severity-critical);
+  --color-severity-critical-bg: var(--severity-critical-bg);
+
+  --color-action-primary: var(--action-primary);
+  --color-action-primary-bg: var(--action-primary-bg);
+  --color-action-danger: var(--action-danger);
+  --color-action-danger-bg: var(--action-danger-bg);
 
   --font-sans: var(--font-sans);
   --font-mono: var(--font-mono);

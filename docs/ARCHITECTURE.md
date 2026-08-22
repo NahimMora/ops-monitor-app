@@ -97,6 +97,39 @@ See `prisma/schema.prisma` for the full, commented schema. Highlights:
 - `AgentCommand` is the only path from "admin clicks a button" to
   "something runs on FERNANDO" — always whitelisted, always audited.
 
+## Alerts vs. incidents
+
+Two separate, deliberately non-overlapping mechanisms:
+
+- **Incidents** (`src/server/incidents.ts`) group repeated *error/warning
+  log lines* by a stable fingerprint — reactive, born from something that
+  already went wrong.
+- **Alerts** (`src/server/alerts.ts`) evaluate *threshold rules* against
+  metrics/state on a schedule (`/api/cron/evaluate-alerts`, every ~5
+  min) — proactive, can fire even with zero matching log lines (e.g. "no
+  successful run in 90 minutes" has no error log to fingerprint).
+
+Both are deterministic — no AI in either path, same invariant as project
+status. Alerts have their own lifecycle
+(`OK → PENDING → FIRING → ACKNOWLEDGED/SILENCED → RESOLVED`, one row per
+`(rule, project)` pair, reused across its lifetime the same way
+`Incident` reuses one row per fingerprint) and their own Web Push types
+(`ALERT_FIRING`/`ALERT_RESOLVED`), independent of incident notifications.
+
+## Run↔log correlation
+
+`LogEvent.runId` is populated on ingestion
+(`/api/agent/events/batch`): the agent attaches the external id of
+whichever run looked "current" that telemetry cycle (RUNNING if one
+exists, else the most recently started) to every log line it tails that
+cycle (`agent/monitor_agent/main.py`, `_pick_current_run_external_id`),
+and the server resolves that to `Run.id` via the same
+`(projectId, externalRunId)` uniqueness `RunsPayloadSchema` already
+relies on. This is best-effort, not exact — stated in code comments, not
+presented as guaranteed — but it's what makes "view logs for this run"
+and "affected runs" on an incident detail page real data instead of
+always-empty columns.
+
 ## What's deliberately not here
 
 No Kafka, no Elasticsearch, no Kubernetes, no Redis. Single Node process

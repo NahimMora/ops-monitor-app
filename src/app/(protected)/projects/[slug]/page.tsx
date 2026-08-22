@@ -1,9 +1,10 @@
 import { notFound } from "next/navigation";
-import { getProjectDetail } from "@/server/dashboard-data";
+import { getProjectDetail, getProjectSuccessTrend } from "@/server/dashboard-data";
 import { StatusBadge, type ProjectStatus } from "@/components/status";
 import { AutoRefresh } from "@/components/auto-refresh";
 import { formatSaltaDateTime } from "@/lib/timezone";
 import { CommandControls } from "@/components/command-controls";
+import { SuccessRateChart } from "@/components/charts/success-rate-chart";
 import Link from "next/link";
 
 export const dynamic = "force-dynamic";
@@ -15,6 +16,8 @@ export default async function ProjectPage({ params }: { params: Promise<{ slug: 
 
   const { project, currentRun, lastRun, recentRuns, today, week, incidents, sessions, scheduler } = data;
   const supportedCommands = (project.supportsCommands as string[] | null) ?? [];
+  const hasRuns = supportedCommands.length > 0 || recentRuns.length > 0;
+  const trend = hasRuns ? await getProjectSuccessTrend(project.id, 30) : null;
 
   return (
     <div className="mx-auto max-w-4xl px-4 py-6 md:px-8 md:py-8">
@@ -49,6 +52,13 @@ export default async function ProjectPage({ params }: { params: Promise<{ slug: 
         <Stat label="Last run" value={lastRun ? lastRun.status : "No data"} sub={lastRun ? formatSaltaDateTime(lastRun.finishedAt ?? lastRun.startedAt) : ""} />
         <Stat label="Duration" value={lastRun?.durationSeconds != null ? `${lastRun.durationSeconds}s` : "—"} sub="" />
       </div>
+
+      {trend && (
+        <section className="mb-6">
+          <h2 className="mb-2 text-[11px] font-semibold tracking-[0.14em] text-text-tertiary uppercase">Success rate — 30 days</h2>
+          <SuccessRateChart data={trend} />
+        </section>
+      )}
 
       {lastRun && lastRun.stages.length > 0 && (
         <section className="mb-6">
@@ -103,7 +113,12 @@ export default async function ProjectPage({ params }: { params: Promise<{ slug: 
       )}
 
       <section className="mb-6">
-        <h2 className="mb-2 text-[11px] font-semibold tracking-[0.14em] text-text-tertiary uppercase">Recent runs</h2>
+        <div className="mb-2 flex items-center justify-between">
+          <h2 className="text-[11px] font-semibold tracking-[0.14em] text-text-tertiary uppercase">Recent runs</h2>
+          <Link href={`/logs?project=${project.slug}`} className="text-xs text-accent hover:text-accent-strong">
+            View logs →
+          </Link>
+        </div>
         <div className="space-y-1.5">
           {recentRuns.length === 0 && <div className="text-xs text-text-tertiary">No data</div>}
           {recentRuns.map((run) => (

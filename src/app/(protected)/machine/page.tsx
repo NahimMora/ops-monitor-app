@@ -1,11 +1,24 @@
+import Link from "next/link";
 import { prisma } from "@/lib/db";
 import { isMachineOnline } from "@/server/status";
+import { getMachineMetricsSeries } from "@/server/dashboard-data";
 import { formatSaltaDateTime } from "@/lib/timezone";
 import { AutoRefresh } from "@/components/auto-refresh";
+import { AreaMetricChart } from "@/components/charts/area-metric-chart";
 
 export const dynamic = "force-dynamic";
 
-export default async function MachinePage() {
+const WINDOWS: Record<string, number> = {
+  "1h": 60 * 60 * 1000,
+  "6h": 6 * 60 * 60 * 1000,
+  "24h": 24 * 60 * 60 * 1000,
+  "7d": 7 * 24 * 60 * 60 * 1000,
+};
+
+export default async function MachinePage({ searchParams }: { searchParams: Promise<{ window?: string }> }) {
+  const params = await searchParams;
+  const window = params.window && WINDOWS[params.window] ? params.window : "6h";
+
   const machine = await prisma.machine.findFirst({ orderBy: { createdAt: "asc" } });
   const latestSnapshot = machine
     ? await prisma.machineHealthSnapshot.findFirst({ where: { machineId: machine.id }, orderBy: { capturedAt: "desc" } })
@@ -13,6 +26,7 @@ export default async function MachinePage() {
   const schedulerTasks = machine
     ? await prisma.schedulerState.findMany({ where: { project: { machineId: machine.id } }, include: { project: { select: { displayName: true } } } })
     : [];
+  const series = machine ? await getMachineMetricsSeries(machine.id, WINDOWS[window]) : null;
 
   if (!machine) {
     return (
@@ -55,6 +69,41 @@ export default async function MachinePage() {
         <Stat label="Last heartbeat" value={machine.lastHeartbeatAt ? formatSaltaDateTime(machine.lastHeartbeatAt) : "never"} />
         <Stat label="Last seen online" value={machine.lastSeenOnlineAt ? formatSaltaDateTime(machine.lastSeenOnlineAt) : "never"} />
       </div>
+
+      <section className="mb-6">
+        <div className="mb-2 flex items-center justify-between">
+          <h2 className="text-[11px] font-semibold tracking-[0.14em] text-text-tertiary uppercase">Trends</h2>
+          <div className="flex gap-1.5 text-xs">
+            {Object.keys(WINDOWS).map((w) => (
+              <Link
+                key={w}
+                href={`/machine?window=${w}`}
+                className={`rounded-full border px-2.5 py-0.5 font-medium transition-colors ${
+                  window === w
+                    ? "border-accent/30 bg-accent-bg text-accent"
+                    : "border-border-subtle bg-surface-1 text-text-tertiary hover:border-border-strong hover:text-text-secondary"
+                }`}
+              >
+                {w}
+              </Link>
+            ))}
+          </div>
+        </div>
+        <div className="space-y-4">
+          <div>
+            <div className="mb-1 text-xs text-text-tertiary">CPU</div>
+            <AreaMetricChart data={series?.cpu ?? []} unit="%" color="var(--status-running)" formatValue={(v) => `${Math.round(v)}`} />
+          </div>
+          <div>
+            <div className="mb-1 text-xs text-text-tertiary">RAM used</div>
+            <AreaMetricChart data={series?.ram ?? []} unit="%" color="var(--accent)" formatValue={(v) => `${Math.round(v)}`} />
+          </div>
+          <div>
+            <div className="mb-1 text-xs text-text-tertiary">Disk used</div>
+            <AreaMetricChart data={series?.disk ?? []} unit="%" color="var(--status-degraded)" formatValue={(v) => `${Math.round(v)}`} />
+          </div>
+        </div>
+      </section>
 
       <section>
         <h2 className="mb-3 text-[11px] font-semibold tracking-[0.14em] text-text-tertiary uppercase">Task scheduler</h2>

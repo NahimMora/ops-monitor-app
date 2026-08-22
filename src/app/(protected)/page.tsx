@@ -19,6 +19,7 @@ export default async function OverviewPage() {
   const data = await getOverviewData();
   const healthyCount = data.projects.filter((p) => p.status === "HEALTHY" || p.status === "RUNNING" || p.status === "IDLE").length;
   const problemCount = data.projects.length - healthyCount;
+  const attentionNeeded = problemCount > 0 || data.activeIncidents.length > 0 || data.activeAlertCount > 0;
 
   return (
     <div>
@@ -30,16 +31,28 @@ export default async function OverviewPage() {
           <div>
             <div className="text-[11px] font-medium tracking-[0.14em] text-text-tertiary uppercase">Overview · Live</div>
             <h1 className="mt-1.5 text-2xl font-semibold tracking-tight md:text-3xl">
-              {problemCount === 0 ? (
+              {!attentionNeeded ? (
                 <span className="text-status-healthy">All systems healthy</span>
-              ) : (
+              ) : problemCount > 0 ? (
                 <span className="text-status-degraded">
                   {problemCount} project{problemCount > 1 ? "s" : ""} need attention
                 </span>
+              ) : (
+                <span className="text-status-degraded">Attention needed</span>
               )}
             </h1>
             <div className="mt-1.5 font-mono text-sm text-text-secondary">
-              {healthyCount} healthy · {problemCount} other · updated {relativeAge(new Date())}
+              {healthyCount} healthy · {problemCount} other
+              {data.activeAlertCount > 0 && (
+                <>
+                  {" · "}
+                  <Link href="/alerts" className="text-status-degraded hover:text-status-critical">
+                    {data.activeAlertCount} alert{data.activeAlertCount > 1 ? "s" : ""}
+                  </Link>
+                </>
+              )}
+              {" · updated "}
+              {relativeAge(new Date())}
             </div>
           </div>
           <div className="flex items-center gap-2">

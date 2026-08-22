@@ -19,7 +19,9 @@ Every route under `(protected)` requires a valid session
 (`src/app/(protected)/layout.tsx` → `getSession()`, redirects to
 `/login`). Every mutating API route not meant for the agent or cron also
 checks `getSession()` explicitly (`/api/commands`, `/api/ai/*`,
-`/api/push/*`).
+`/api/push/*`, `/api/incidents/[id]/{acknowledge,resolve}`,
+`/api/alerts/[id]/{acknowledge,silence}`) and writes an `AuditEvent` on
+success.
 
 ## Agent authentication
 

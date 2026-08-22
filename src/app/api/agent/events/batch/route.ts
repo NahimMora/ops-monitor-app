@@ -13,6 +13,10 @@ export async function POST(req: NextRequest) {
     },
     async (_agentId, body) => {
       const projectCache = new Map<string, { id: string } | null>();
+      // Cache run lookups per (projectId, externalRunId) within this batch
+      // — a single events_batch commonly has dozens of lines from the same
+      // run, and there's no reason to hit the DB once per line for this.
+      const runCache = new Map<string, string | null>();
 
       let stored = 0;
       let deduped = 0;
@@ -23,6 +27,21 @@ export async function POST(req: NextRequest) {
           projectCache.set(event.project_slug, project);
         }
         if (!project) continue;
+
+        let runId: string | null = null;
+        if (event.run_external_id) {
+          const runCacheKey = `${project.id}:${event.run_external_id}`;
+          if (runCache.has(runCacheKey)) {
+            runId = runCache.get(runCacheKey)!;
+          } else {
+            const run = await prisma.run.findUnique({
+              where: { projectId_externalRunId: { projectId: project.id, externalRunId: event.run_external_id } },
+              select: { id: true },
+            });
+            runId = run?.id ?? null;
+            runCache.set(runCacheKey, runId);
+          }
+        }
 
         const occurredAt = new Date(event.occurred_at);
 
@@ -45,6 +64,7 @@ export async function POST(req: NextRequest) {
         await prisma.logEvent.create({
           data: {
             projectId: project.id,
+            runId,
             occurredAt,
             level: event.level,
             source: event.source,
@@ -62,6 +82,7 @@ export async function POST(req: NextRequest) {
             level: event.level,
             message: event.message,
             occurredAt,
+            runId,
           });
         }
       }

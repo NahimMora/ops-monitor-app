@@ -91,6 +91,14 @@ export const LogEventSchema = z.object({
   source: z.string(),
   message: z.string().max(8000),
   dedupe_key: z.string(),
+  // Best-effort correlation to the run that was active when this line was
+  // tailed (the agent picks the RUNNING run, else the most recently
+  // started one, from the same get_runs() call it already makes this
+  // cycle — see agent/monitor_agent/main.py). Resolved server-side to
+  // Run.id via the (projectId, externalRunId) unique constraint. Absent
+  // for projects with no discrete runs (e.g. HolaSalta Manager) or if no
+  // run has started yet.
+  run_external_id: z.string().nullable().optional(),
 });
 
 export const EventsBatchSchema = z.object({

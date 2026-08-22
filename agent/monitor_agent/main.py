@@ -149,6 +149,7 @@ class Agent:
                 scheduler_states = self._safe_get(adapter.get_scheduler_state, [])
                 sessions = self._safe_get(adapter.get_sessions, [])
                 runs = self._safe_get(lambda: adapter.get_runs(since_iso=None), [])
+                current_run_external_id = _pick_current_run_external_id(runs)
 
                 for source in self._safe_get(adapter.get_log_sources, []):
                     from pathlib import Path
@@ -162,6 +163,7 @@ class Agent:
                                 "source": line.source,
                                 "message": line.text,
                                 "dedupe_key": dedupe_key(line.source, line.text),
+                                "run_external_id": current_run_external_id,
                             }
                         )
 
@@ -269,6 +271,20 @@ def _now_iso() -> str:
 
 def _health_to_dict(health) -> dict[str, Any]:
     return {"status": health.status, "reason": health.reason, "heartbeat_age_seconds": health.heartbeat_age_seconds}
+
+
+def _pick_current_run_external_id(runs: list) -> str | None:
+    """Best-effort: which run were the log lines tailed this cycle most
+    likely part of. Prefers a RUNNING run; falls back to the most
+    recently started one; None if there are no runs yet (e.g. a project
+    with no discrete run concept, or before the first cycle)."""
+    if not runs:
+        return None
+    running = [r for r in runs if getattr(r, "status", "").lower() == "running"]
+    if running:
+        return running[0].external_run_id
+    latest = max(runs, key=lambda r: getattr(r, "started_at", "") or "")
+    return latest.external_run_id
 
 
 def _guess_level(text: str) -> str:

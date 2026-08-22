@@ -60,7 +60,47 @@ async function main() {
     });
   }
 
-  console.log(`Seeded admin user (${adminEmail}), machine (${DEFAULT_HOSTNAME}), and ${projects.length} projects.`);
+  const alertRules = [
+    {
+      key: "machine_disk_low",
+      name: "Disk space low",
+      description: `${DEFAULT_HOSTNAME} disk free space below threshold.`,
+      severity: "WARNING" as const,
+      scope: "machine",
+      projectSlug: null,
+      config: { thresholdMb: 5000, forMinutes: 10 },
+    },
+    {
+      key: "project_no_recent_success",
+      name: "No recent successful run",
+      description: "A pipeline project has gone unusually long without a successful run.",
+      severity: "CRITICAL" as const,
+      scope: "project",
+      projectSlug: null, // applies to every project with discrete runs
+      config: { thresholdMinutes: 90, forMinutes: 0 },
+    },
+    {
+      key: "project_success_rate_low",
+      name: "Success rate low",
+      description: "A pipeline project's rolling success rate has dropped below threshold.",
+      severity: "WARNING" as const,
+      scope: "project",
+      projectSlug: null,
+      config: { thresholdPercent: 60, windowMinutes: 60, minSamples: 3, forMinutes: 10 },
+    },
+  ];
+
+  for (const rule of alertRules) {
+    await prisma.alertRule.upsert({
+      where: { key: rule.key },
+      create: rule,
+      update: { name: rule.name, description: rule.description, severity: rule.severity, config: rule.config },
+    });
+  }
+
+  console.log(
+    `Seeded admin user (${adminEmail}), machine (${DEFAULT_HOSTNAME}), ${projects.length} projects, and ${alertRules.length} alert rules.`
+  );
 }
 
 main()

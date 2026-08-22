@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/db";
 import { StatusBadge, type ProjectStatus } from "@/components/status";
@@ -15,6 +16,11 @@ export default async function RunDetailPage({ params }: { params: Promise<{ id: 
   if (!run) notFound();
 
   const analysis = await prisma.aiAnalysis.findUnique({ where: { cacheKey: `run:${run.id}` } });
+  const relatedIncidentOccurrence = await prisma.incidentOccurrence.findFirst({
+    where: { runId: run.id },
+    include: { incident: { select: { id: true, title: true } } },
+    orderBy: { occurredAt: "desc" },
+  });
 
   return (
     <div className="mx-auto max-w-3xl px-4 py-6 md:px-8 md:py-8">
@@ -25,6 +31,15 @@ export default async function RunDetailPage({ params }: { params: Promise<{ id: 
         </div>
         <StatusBadge status={run.status as ProjectStatus} />
       </div>
+
+      {relatedIncidentOccurrence && (
+        <Link
+          href={`/incidents/${relatedIncidentOccurrence.incident.id}`}
+          className="mb-4 block rounded-lg border border-status-degraded/30 bg-status-degraded-bg px-3 py-2 text-xs text-status-degraded hover:border-status-degraded/50"
+        >
+          Related incident: {relatedIncidentOccurrence.incident.title} →
+        </Link>
+      )}
 
       <div className="mb-6 grid grid-cols-2 gap-3 md:grid-cols-4">
         <Stat label="Duration" value={run.durationSeconds != null ? `${run.durationSeconds}s` : "—"} />
@@ -63,7 +78,12 @@ export default async function RunDetailPage({ params }: { params: Promise<{ id: 
       </section>
 
       <section>
-        <h2 className="mb-2 text-[11px] font-semibold tracking-[0.14em] text-text-tertiary uppercase">Log excerpt</h2>
+        <div className="mb-2 flex items-center justify-between">
+          <h2 className="text-[11px] font-semibold tracking-[0.14em] text-text-tertiary uppercase">Log excerpt</h2>
+          <Link href={`/logs?runId=${run.id}&range=7d`} className="text-xs text-accent hover:text-accent-strong">
+            Open in Log Explorer →
+          </Link>
+        </div>
         <div className="max-h-96 space-y-1 overflow-y-auto rounded-lg border border-border-subtle bg-surface-1 p-3 font-mono text-xs">
           {run.logEvents.length === 0 && <div className="text-text-tertiary">No log events recorded for this run.</div>}
           {run.logEvents.map((log) => (

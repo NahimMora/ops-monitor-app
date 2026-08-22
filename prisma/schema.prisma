@@ -399,6 +399,64 @@ model AgentCommand {
 }
 
 // ---------------------------------------------------------------------------
+// Alerts (deterministic rule engine — see src/server/alerts.ts)
+// ---------------------------------------------------------------------------
+
+enum AlertSeverity {
+  INFO
+  WARNING
+  CRITICAL
+}
+
+enum AlertStatus {
+  OK
+  PENDING
+  FIRING
+  ACKNOWLEDGED
+  SILENCED
+  RESOLVED
+}
+
+model AlertRule {
+  id          String        @id @default(cuid())
+  key         String        @unique // "machine_disk_low" | "project_no_recent_success" | "project_success_rate_low"
+  name        String
+  description String
+  severity    AlertSeverity
+  enabled     Boolean       @default(true)
+  scope       String // "machine" | "project"
+  projectSlug String? // null for machine-scoped rules
+  config      Json // { thresholdMb?, thresholdMinutes?, thresholdPercent?, windowMinutes?, minSamples?, forMinutes }
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  alerts Alert[]
+}
+
+model Alert {
+  id              String        @id @default(cuid())
+  ruleId          String
+  rule            AlertRule     @relation(fields: [ruleId], references: [id], onDelete: Cascade)
+  projectSlug     String?
+  status          AlertStatus   @default(PENDING)
+  severity        AlertSeverity
+  title           String
+  message         String        @db.Text
+  value           Json? // last observed metric snapshot, for the UI/AI context
+  firstFiredAt    DateTime
+  lastEvaluatedAt DateTime
+  firingAt        DateTime?
+  acknowledgedAt  DateTime?
+  silencedUntil   DateTime?
+  resolvedAt      DateTime?
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  @@unique([ruleId, projectSlug])
+  @@index([status])
+}
+
+// ---------------------------------------------------------------------------
 // Audit trail
 // ---------------------------------------------------------------------------
 
@@ -437,6 +495,8 @@ enum NotificationEventType {
   INCIDENT_CRITICAL
   SESSION_EXPIRED
   PROJECT_RECOVERED
+  ALERT_FIRING
+  ALERT_RESOLVED
 }
 
 model NotificationEvent {

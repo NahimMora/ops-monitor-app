@@ -56,9 +56,40 @@ Incidents auto-recover (`status → RESOLVED`) once no new occurrence
 arrives for 30 minutes (`autoRecoverStaleIncidents`, run from the same
 5-minute machine-health cron). If it's still active and the underlying
 problem is actually fixed, it will flip within that window on its own —
-no manual action needed. To force it, an admin `resolve` action isn't
-built as a button yet; update the row directly (`Incident.status`) if
-truly needed before that endpoint exists.
+no manual action needed. To force it immediately, use the **Resolve**
+button on the incident's detail page (`/incidents/[id]`) or the list —
+this calls `POST /api/incidents/[id]/resolve`, audited as
+`incident_resolved`. If a fresh occurrence arrives afterward, the
+incident automatically un-resolves back to `ACTIVE`
+(`recordIncidentOccurrence` in `src/server/incidents.ts`), so resolving
+early is always safe.
+
+## An alert is firing and I want it to stop paging me
+
+- **Acknowledge** (`/alerts`) — stops nothing, just marks it seen; the
+  alert stays `FIRING`-equivalent for evaluation purposes but you won't
+  get confused about whether you've noticed it.
+- **Silence** (30m/1h/4h) — suppresses re-notification until the window
+  passes, after which it reverts to `FIRING` if the underlying condition
+  is still breaching (`src/server/alerts.ts` upsertAlertState). Silencing
+  does not change the underlying system — if the disk is actually still
+  filling up, it will still be full when the silence expires.
+- Alerts auto-resolve the moment their rule stops breaching on the next
+  5-minute evaluation (`/api/cron/evaluate-alerts`) — no manual resolve
+  action for alerts (unlike incidents), since "the metric recovered" is
+  itself an objective, checkable fact the evaluator already computes.
+
+## A run's "Log excerpt" / Log Explorer `runId` filter is empty
+
+`LogEvent.runId` is a best-effort correlation, not exact (see
+docs/ARCHITECTURE.md "Run↔log correlation") — the agent tags each log
+line with whatever run looked current at the time it was tailed. A line
+tailed right at a run boundary can land on the wrong run, and log rows
+ingested before this feature existed have `runId = null` permanently (no
+backfill). If it's empty for a *recent* run and machine/agent are online,
+check the project actually has discrete runs (HolaSalta Manager doesn't
+— it's a continuous service, see docs/PROJECT_INTEGRATIONS.md §A) before
+assuming something's broken.
 
 ## Daily AI brief didn't show up
 
